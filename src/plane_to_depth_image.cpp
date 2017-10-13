@@ -77,6 +77,13 @@ std::pair<MatrixXd, MatrixXd> PlaneToDepthImage::depthCalculationXYMultiplier(
   return multiplier_pair;
 }
 
+struct real_value {
+  typedef float result_value;
+  float operator()(float value) const {
+    return std::isnan(value) ? 0. : value;
+  }
+};
+
 PlaneToDepthImage::Errors PlaneToDepthImage::getErrors(const Eigen::Affine3d& plane_transformation,
                                                        const CameraModel::Parameters& camera_model_paramaters,
                                                        Eigen::MatrixXf image_matrix)
@@ -88,8 +95,7 @@ PlaneToDepthImage::Errors PlaneToDepthImage::getErrors(const Eigen::Affine3d& pl
   // nan == nan gives false
   int not_nan_count = (difference.array() == difference.array()).count();
 
-  difference = difference.unaryExpr([](float v)
-  { return std::isnan(v) ? 0.0 : v;});
+  difference = difference.unaryExpr(real_value());
 
   double mean = difference.sum() / not_nan_count;
 
