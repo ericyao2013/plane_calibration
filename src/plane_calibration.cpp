@@ -52,12 +52,6 @@ std::pair<double, double> PlaneCalibration::calibrate(const Eigen::MatrixXf& fil
   x_angle_offset += angle_offset_estimation.first;
   y_angle_offset += angle_offset_estimation.second;
 
-//  std::cout << "max_angle_deviation: " << ecl::radians_to_degrees(temp_parameters_.deviation_) << std::endl;
-//  std::cout << "0 angles : " << ecl::radians_to_degrees(angle_offset_estimation.first) << ", "
-//      << ecl::radians_to_degrees(angle_offset_estimation.second) << std::endl;
-//  std::cout << "0 full   : " << ecl::radians_to_degrees(x_angle_offset) << ", "
-//      << ecl::radians_to_degrees(y_angle_offset) << std::endl;
-
   temp_parameters_.rotation_ = temp_parameters_.rotation_
       * Eigen::AngleAxisd(angle_offset_estimation.first, Eigen::Vector3d::UnitX())
       * Eigen::AngleAxisd(angle_offset_estimation.second, Eigen::Vector3d::UnitY());
@@ -83,11 +77,6 @@ std::pair<double, double> PlaneCalibration::calibrate(const Eigen::MatrixXf& fil
     x_angle_offset += angle_offset_estimation.first;
     y_angle_offset += angle_offset_estimation.second;
 
-//    std::cout << "max_angle_deviation: " << ecl::radians_to_degrees(parameters.deviation_) << std::endl;
-//    std::cout << i + 1 << " angles : " << ecl::radians_to_degrees(angle_offset_estimation.first) << ", "
-//        << ecl::radians_to_degrees(angle_offset_estimation.second) << std::endl;
-//    std::cout << i + 1 << " full   : " << ecl::radians_to_degrees(x_angle_offset) << ", "
-//        << ecl::radians_to_degrees(y_angle_offset) << std::endl;
   }
 
   return std::make_pair(x_angle_offset, y_angle_offset);

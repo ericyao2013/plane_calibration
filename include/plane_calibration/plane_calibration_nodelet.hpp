@@ -70,6 +70,7 @@ protected:
   std::atomic<int> iterations_;
 
   std::pair<double, double> last_valid_calibration_result_;
+  std::pair<double, double> last_calibration_result_;
   Eigen::MatrixXf last_valid_calibration_result_plane_;
   Eigen::Affine3d last_valid_calibration_transformation_;
 
@@ -97,6 +98,12 @@ protected:
   ros::Publisher pub_update_;
   ros::Subscriber sub_camera_info_;
   ros::Subscriber sub_depth_image_;
+  
+  // some parameter for calibration
+  float maximum_range_of_depth_camera;
+  float threshold_normalized_z_by_xy;
+  float threshold_normalized_invalid_z_by_xy;
+  float max_angle_change;
 };
 
 } /* end namespace */

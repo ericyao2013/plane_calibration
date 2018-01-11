@@ -37,6 +37,9 @@ PlaneCalibrationNodelet::PlaneCalibrationNodelet() :
       * Eigen::AngleAxisd(last_valid_calibration_result_.second, Eigen::Vector3d::UnitY());
 
   last_valid_calibration_transformation_ = Eigen::Translation3d(0.0, 0.0, 0.0) * rotation;
+  
+  last_calibration_result_.first = 0;
+  last_calibration_result_.second = 0;
 }
 
 void PlaneCalibrationNodelet::onInit()
@@ -57,7 +60,12 @@ void PlaneCalibrationNodelet::onInit()
 
   node_handle.param("camera_depth_frame", camera_depth_frame_, std::string("camera_depth_optical_frame"));
   node_handle.param("result_camera_depth_frame", result_frame_, std::string("ground_plane_frame"));
-
+    
+  node_handle.getParam("maximum_range_of_depth_camera", maximum_range_of_depth_camera);
+  node_handle.getParam("threshold_normalized_z_by_xy", threshold_normalized_z_by_xy);
+  node_handle.getParam("threshold_normalized_invalid_z_by_xy", threshold_normalized_invalid_z_by_xy);
+  node_handle.getParam("max_angle_change", max_angle_change);
+  
   depth_visualizer_ = std::make_shared<DepthVisualizer>(node_handle, camera_depth_frame_);
 
   pub_update_ = node_handle.advertise<geometry_msgs::Pose2D>("plane_angle_update_degrees", 1);
@@ -263,6 +271,7 @@ std::pair<Eigen::Vector3d, Eigen::AngleAxisd> PlaneCalibrationNodelet::getTransf
   return std::make_pair(offset, rotation);
 }
 
+double restored_sensor_height(0.0f);
 std::pair<Eigen::Vector3d, Eigen::AngleAxisd> PlaneCalibrationNodelet::getTransformTF()
 {
   geometry_msgs::TransformStamped transformStamped;
@@ -274,6 +283,8 @@ std::pair<Eigen::Vector3d, Eigen::AngleAxisd> PlaneCalibrationNodelet::getTransf
 
   Eigen::Vector3d sensor_z_axis = Eigen::Vector3d::UnitZ();
   double sensor_height = eigen_transform.translation()(2);
+  
+  restored_sensor_height = sensor_height;
 
   Eigen::Vector3d sensor_z_axis_in_footprint = eigen_transform.linear() * sensor_z_axis;
   double z_component = sensor_z_axis_in_footprint.z();
@@ -304,6 +315,157 @@ void PlaneCalibrationNodelet::runCalibration(Eigen::MatrixXf depth_matrix)
                                     camera_model_->getParameters());
   }
 
+  Eigen::MatrixXf raw_depth = depth_matrix;
+    
+  // some candidate parameters
+  const float invalid_height_threshold = 0.04;
+  
+  // maximum change of z should be constrained by maximum calibration range
+  const float max_z_by_xy( std::tan( max_deviation_ ) );  
+  
+  // check plane here
+  {
+    CameraModel::Parameters cmp = camera_model_->getParameters();
+    Eigen::Matrix3d rot = calibration_parameters_->getParameters().rotation_.matrix().transpose();
+    
+    
+    std::vector< Eigen::Vector3f > xyzs( raw_depth.rows() * raw_depth.cols(), Eigen::Vector3f(0,0,0) );
+    
+    int idx(0);
+    for( int i(0); i<raw_depth.rows(); i++ )
+    {
+      for( int j(0); j<raw_depth.cols(); j++, idx ++ )
+      {
+        double depth = raw_depth(i,j);
+        if( std::isnan(depth) || depth > maximum_range_of_depth_camera )
+        {
+          continue;
+        }
+        
+        Eigen::Vector3d nv(j,i,1);
+        nv.x() -= cmp.center_x_;
+        nv.y() -= cmp.center_y_;
+        nv.x() /= cmp.f_x_;
+        nv.y() /= cmp.f_y_;
+        nv *= depth;
+        
+        xyzs[idx] = (rot * nv).cast<float>();
+      }
+    }
+    
+    const int sw = 2;
+    const int erows = raw_depth.rows() - sw;
+    const int ecols = raw_depth.cols() - sw;
+    
+    
+    int valid_points(0);
+    float avg_normalized_z_by_x(0);
+    float avg_normalized_z_by_y(0);
+    
+    int invalid_points_x(0);
+    int invalid_points_y(0);
+    float avg_invalid_normalized_z_by_x(0);
+    float avg_invalid_normalized_z_by_y(0);
+     
+    
+    for( int i(sw); i<erows; i++ )
+    {
+      idx = i * raw_depth.cols() + sw;
+      for( int j(sw); j<ecols; j++, idx++ )
+      {
+        if( xyzs[idx-sw].x() == 0.0f 
+        || xyzs[idx+sw].x() == 0.0f
+        || xyzs[idx+raw_depth.cols()*sw].x() == 0.0f
+        || xyzs[idx-raw_depth.cols()*sw].x() == 0.0f )
+        {
+          continue;
+        }
+        
+        Eigen::Vector3f dx = xyzs[idx+sw] - xyzs[idx-sw];
+        Eigen::Vector3f dy = xyzs[idx+raw_depth.cols()*sw] - xyzs[idx-raw_depth.cols()*sw];
+        
+        valid_points++;
+        
+        float normalized_z_by_x = std::abs( dx.z() / dx.head<2>().norm() );
+        float normalized_z_by_y = std::abs( dy.z() / dy.head<2>().norm() );   
+        
+        avg_normalized_z_by_x += normalized_z_by_x;
+        avg_normalized_z_by_y += normalized_z_by_y;
+        
+        if( normalized_z_by_x > max_z_by_xy )
+        {
+          invalid_points_x++;
+          avg_invalid_normalized_z_by_x += normalized_z_by_x;
+        }
+        
+        if( normalized_z_by_y > max_z_by_xy )
+        {
+          invalid_points_y++;
+          avg_invalid_normalized_z_by_y += normalized_z_by_y;          
+        }
+      }
+    }
+    
+    if( valid_points < 40000 )
+    {
+      ROS_INFO("[PlaneCalibrationNodelet]: You do not have enough points for plane calibration ");
+      return;      
+    }
+    
+    avg_normalized_z_by_x /= static_cast<float>( valid_points );
+    avg_normalized_z_by_y /= static_cast<float>( valid_points );
+    if( avg_normalized_z_by_x > threshold_normalized_z_by_xy 
+      || avg_normalized_z_by_y > threshold_normalized_z_by_xy )
+    {
+      if (debug_)
+      {
+        ROS_INFO_STREAM("[PlaneCalibrationNodelet]: valid_points = " << valid_points  << " normalized_z_by_x = " << avg_normalized_z_by_x <<" normalized_z_by_y = " << avg_normalized_z_by_y);
+      }
+      return;
+    }
+    
+    if( invalid_points_x > 10 ) 
+    {
+      avg_invalid_normalized_z_by_x /= static_cast<float>( invalid_points_x );
+      if( avg_invalid_normalized_z_by_x > threshold_normalized_invalid_z_by_xy )
+      {
+        if ( debug_)
+        {
+         ROS_INFO_STREAM("[PlaneCalibrationNodelet]: invalid_points_x = " << invalid_points_x << ", avg_invalid_normalized_z_by_x = " << avg_invalid_normalized_z_by_x);
+        }
+        return;
+      }
+    }
+    else 
+    {
+      if ( debug_ )
+      {
+        ROS_INFO("[PlaneCalibrationNodelet]: no invalid points along to x ");
+      }
+    }
+    
+    if( invalid_points_y ) 
+    {
+      avg_invalid_normalized_z_by_y /= static_cast<float>( invalid_points_y );
+      if( avg_invalid_normalized_z_by_y > threshold_normalized_invalid_z_by_xy )
+      {
+        if ( debug_)
+        {
+          ROS_INFO_STREAM("[PlaneCalibrationNodelet]: invalid_points_y = " << invalid_points_y << ", avg_invalid_normalized_z_by_y = " << avg_invalid_normalized_z_by_y);
+        }
+        return;
+      }
+    }
+    else 
+    {
+      if ( debug_ )
+      {
+        ROS_INFO("[PlaneCalibrationNodelet]: no invalid points along to y ");
+      }
+    }
+    
+  }  
+  
   input_filter_->filter(depth_matrix, debug_);
 
   bool input_data_not_usable = !input_filter_->dataIsUsable(depth_matrix, debug_);
@@ -318,9 +480,11 @@ void PlaneCalibrationNodelet::runCalibration(Eigen::MatrixXf depth_matrix)
 
   if (!always_update_ && last_valid_calibration_result_plane_.size() != 0)
   {
+    // is there any update from calibration module ?
     bool parameters_updated = calibration_parameters_->parametersUpdated();
-    bool last_calibration_gone_bad = calibration_validation_->groundPlaneHasDataBelow(
-        last_valid_calibration_result_plane_, depth_matrix, debug_);
+    
+    // can we use past calibration results for incoming data ?
+    bool last_calibration_gone_bad = calibration_validation_->groundPlaneHasDataBelow( last_valid_calibration_result_plane_, depth_matrix, debug_);
     if (!parameters_updated && !last_calibration_gone_bad)
     {
       if (debug_)
@@ -348,11 +512,6 @@ void PlaneCalibrationNodelet::runCalibration(Eigen::MatrixXf depth_matrix)
     depth_visualizer_->publishCloud("debug/calibration_result", transform, camera_model_->getParameters());
   }
 
-  //  std::cout << "offset angles: " << ecl::radians_to_degrees(one_shot_result.first) << ", "
-  //      << ecl::radians_to_degrees(one_shot_result.second) << std::endl;
-  //  std::cout << "original angles: " << ecl::radians_to_degrees(px_offset_.load()) << ", "
-  //      << ecl::radians_to_degrees(py_offset_.load()) << std::endl;
-
   bool valid_calibration_angles = calibration_validation_->angleOffsetValid(calibration_result);
   if (!valid_calibration_angles)
   {
@@ -366,6 +525,21 @@ void PlaneCalibrationNodelet::runCalibration(Eigen::MatrixXf depth_matrix)
     //keep old / last one
     return;
   }
+  
+  // check discontinuity
+  double xangle_diff = ecl::radians_to_degrees( std::abs( calibration_result.first - last_calibration_result_.first ) );
+  double yangle_diff = ecl::radians_to_degrees( std::abs( calibration_result.second - last_calibration_result_.second ) );
+  
+  last_calibration_result_ = calibration_result;
+  if( xangle_diff > max_angle_change || yangle_diff > max_angle_change )
+  {
+    if (debug_)
+    {
+      ROS_WARN_STREAM( "[PlaneCalibrationNodelet]: Too big change of angles. xangle_diff[degree]: " << xangle_diff << ", yangle_diff[degree] " << yangle_diff );
+    }
+  }
+  
+  
 
   Eigen::AngleAxisd rotation;
   rotation = parameters.rotation_ * Eigen::AngleAxisd(calibration_result.first, Eigen::Vector3d::UnitX())
@@ -373,6 +547,63 @@ void PlaneCalibrationNodelet::runCalibration(Eigen::MatrixXf depth_matrix)
 
   Eigen::Affine3d transform = Eigen::Translation3d(parameters.ground_plane_offset_) * rotation;
   Eigen::MatrixXf new_ground_plane = plane_to_depth_converter_->convert(transform);
+  
+  {
+    CameraModel::Parameters cmp = camera_model_->getParameters();
+    Eigen::Matrix3d rot = rotation.matrix();
+    
+    float avg_height(0);
+    float avg_invalid_point_height(0);
+    int valid_points(0);
+    int invalid_points(0);
+    
+    for( int i(0); i<raw_depth.rows(); i++ )
+    {
+      for( int j(0); j<raw_depth.cols(); j++ )
+      {
+        double depth = raw_depth(i,j);
+        if( std::isnan(depth) || depth > maximum_range_of_depth_camera )
+        {
+          continue;
+        }
+        
+        Eigen::Vector3d nv(j,i,1);
+        nv.x() -= cmp.center_x_;
+        nv.y() -= cmp.center_y_;
+        nv.x() /= cmp.f_x_;
+        nv.y() /= cmp.f_y_;
+        nv *= depth;
+        
+        Eigen::Vector3d prj = rot.transpose() * nv;
+        double height_from_ground = prj.z() + restored_sensor_height;
+        
+        avg_height += std::abs(height_from_ground);
+        valid_points ++;
+        if( std::abs(height_from_ground) > invalid_height_threshold )
+        {
+          avg_invalid_point_height += std::abs(height_from_ground);
+          invalid_points ++;
+        }
+      }
+    }
+
+    if( invalid_points > 10 )
+    { 
+      if (debug_)
+      {
+        ROS_INFO_STREAM("[PlaneCalibrationNodelet]: invalid points =" <<  invalid_points << ", avg_height_of_invalid_points =" << avg_invalid_point_height/(invalid_points));
+        ROS_WARN_STREAM("[PlaneCalibrationNodelet]: There would be taller obstacles");
+      }      
+      return;
+    }
+    else 
+    {
+      if ( debug_)
+      {
+        ROS_INFO_STREAM("[PlaneCalibrationNodelet]: valid points =" <<  invalid_points << ", avg_height_of_invalid_points =" << avg_invalid_point_height/(invalid_points));
+      }
+    }
+  }
 
   bool good_calibration = calibration_validation_->groundPlaneFitsData(new_ground_plane, depth_matrix, debug_);
   if (!good_calibration)
