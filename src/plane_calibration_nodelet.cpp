@@ -60,7 +60,12 @@ void PlaneCalibrationNodelet::onInit()
 
   node_handle.param("camera_depth_frame", camera_depth_frame_, std::string("camera_depth_optical_frame"));
   node_handle.param("result_camera_depth_frame", result_frame_, std::string("ground_plane_frame"));
-
+    
+  node_handle.getParam("maximum_range_of_depth_camera", maximum_range_of_depth_camera);
+  node_handle.getParam("threshold_normalized_z_by_xy", threshold_normalized_z_by_xy);
+  node_handle.getParam("threshold_normalized_invalid_z_by_xy", threshold_normalized_invalid_z_by_xy);
+  node_handle.getParam("max_angle_change", max_angle_change);
+  
   depth_visualizer_ = std::make_shared<DepthVisualizer>(node_handle, camera_depth_frame_);
 
   pub_update_ = node_handle.advertise<geometry_msgs::Pose2D>("plane_angle_update_degrees", 1);
@@ -311,15 +316,12 @@ void PlaneCalibrationNodelet::runCalibration(Eigen::MatrixXf depth_matrix)
   }
 
   Eigen::MatrixXf raw_depth = depth_matrix;
-  
-  // some candidate parameters
-  const float maximum_range_of_depth_camera = 3.5f;
-  const float threshold_normalized_z_by_xy = 0.13f;
-  const float threshold_normalized_invalid_z_by_xy = 0.32f;
-  const float max_angle_change = 0.8f;
-  
+    
   // some candidate parameters
   const float invalid_height_threshold = 0.04;
+  
+  // maximum change of z should be constrained by maximum calibration range
+  const float max_z_by_xy( std::tan( max_deviation_ ) );  
   
   // check plane here
   {
@@ -355,7 +357,6 @@ void PlaneCalibrationNodelet::runCalibration(Eigen::MatrixXf depth_matrix)
     const int erows = raw_depth.rows() - sw;
     const int ecols = raw_depth.cols() - sw;
     
-    const float max_z_by_xy( std::tan(0.17453) );
     
     int valid_points(0);
     float avg_normalized_z_by_x(0);
@@ -407,7 +408,7 @@ void PlaneCalibrationNodelet::runCalibration(Eigen::MatrixXf depth_matrix)
     
     if( valid_points < 40000 )
     {
-      std::cout << "You do not have enough points for plane calibration " << std::endl;
+      ROS_INFO("[PlaneCalibrationNodelet]: You do not have enough points for plane calibration ");
       return;      
     }
     
@@ -416,7 +417,10 @@ void PlaneCalibrationNodelet::runCalibration(Eigen::MatrixXf depth_matrix)
     if( avg_normalized_z_by_x > threshold_normalized_z_by_xy 
       || avg_normalized_z_by_y > threshold_normalized_z_by_xy )
     {
-      printf("valid_points = %d, normalized_z_by_x = %f, normalized_z_by_y = %f \n", valid_points, avg_normalized_z_by_x, avg_normalized_z_by_y );
+      if (debug_)
+      {
+        ROS_INFO_STREAM("[PlaneCalibrationNodelet]: valid_points = " << valid_points  << " normalized_z_by_x = " << avg_normalized_z_by_x <<" normalized_z_by_y = " << avg_normalized_z_by_y);
+      }
       return;
     }
     
@@ -425,13 +429,19 @@ void PlaneCalibrationNodelet::runCalibration(Eigen::MatrixXf depth_matrix)
       avg_invalid_normalized_z_by_x /= static_cast<float>( invalid_points_x );
       if( avg_invalid_normalized_z_by_x > threshold_normalized_invalid_z_by_xy )
       {
-        printf("invalid_points_x = %d, avg_invalid_normalized_z_by_x = %f \n", invalid_points_x, avg_invalid_normalized_z_by_x );
+        if ( debug_)
+        {
+         ROS_INFO_STREAM("[PlaneCalibrationNodelet]: invalid_points_x = " << invalid_points_x << ", avg_invalid_normalized_z_by_x = " << avg_invalid_normalized_z_by_x);
+        }
         return;
       }
     }
     else 
     {
-      printf("no invalid points along to x \n");
+      if ( debug_ )
+      {
+        ROS_INFO("[PlaneCalibrationNodelet]: no invalid points along to x ");
+      }
     }
     
     if( invalid_points_y ) 
@@ -439,13 +449,19 @@ void PlaneCalibrationNodelet::runCalibration(Eigen::MatrixXf depth_matrix)
       avg_invalid_normalized_z_by_y /= static_cast<float>( invalid_points_y );
       if( avg_invalid_normalized_z_by_y > threshold_normalized_invalid_z_by_xy )
       {
-        printf("invalid_points_y = %d, avg_invalid_normalized_z_by_y = %f \n", invalid_points_y, avg_invalid_normalized_z_by_y );
+        if ( debug_)
+        {
+          ROS_INFO_STREAM("[PlaneCalibrationNodelet]: invalid_points_y = " << invalid_points_y << ", avg_invalid_normalized_z_by_y = " << avg_invalid_normalized_z_by_y);
+        }
         return;
       }
     }
     else 
     {
-      printf("no invalid points along to y \n");
+      if ( debug_ )
+      {
+        ROS_INFO("[PlaneCalibrationNodelet]: no invalid points along to y ");
+      }
     }
     
   }  
@@ -495,11 +511,6 @@ void PlaneCalibrationNodelet::runCalibration(Eigen::MatrixXf depth_matrix)
 
     depth_visualizer_->publishCloud("debug/calibration_result", transform, camera_model_->getParameters());
   }
-
-  //  std::cout << "offset angles: " << ecl::radians_to_degrees(one_shot_result.first) << ", "
-  //      << ecl::radians_to_degrees(one_shot_result.second) << std::endl;
-  //  std::cout << "original angles: " << ecl::radians_to_degrees(px_offset_.load()) << ", "
-  //      << ecl::radians_to_degrees(py_offset_.load()) << std::endl;
 
   bool valid_calibration_angles = calibration_validation_->angleOffsetValid(calibration_result);
   if (!valid_calibration_angles)
@@ -577,17 +588,20 @@ void PlaneCalibrationNodelet::runCalibration(Eigen::MatrixXf depth_matrix)
     }
 
     if( invalid_points > 10 )
-    {
-      printf("invalid points = %d, avg_height_of_invalid_points = %lf \n", invalid_points, avg_invalid_point_height/(invalid_points) ); 
+    { 
       if (debug_)
       {
+        ROS_INFO_STREAM("[PlaneCalibrationNodelet]: invalid points =" <<  invalid_points << ", avg_height_of_invalid_points =" << avg_invalid_point_height/(invalid_points));
         ROS_WARN_STREAM("[PlaneCalibrationNodelet]: There would be taller obstacles");
       }      
       return;
     }
     else 
     {
-      printf("valid points = %d, avg_height = %lf \n", valid_points, avg_height/valid_points );
+      if ( debug_)
+      {
+        ROS_INFO_STREAM("[PlaneCalibrationNodelet]: valid points =" <<  invalid_points << ", avg_height_of_invalid_points =" << avg_invalid_point_height/(invalid_points));
+      }
     }
   }
 

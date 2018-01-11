@@ -98,6 +98,12 @@ protected:
   ros::Publisher pub_update_;
   ros::Subscriber sub_camera_info_;
   ros::Subscriber sub_depth_image_;
+  
+  // some parameter for calibration
+  float maximum_range_of_depth_camera;
+  float threshold_normalized_z_by_xy;
+  float threshold_normalized_invalid_z_by_xy;
+  float max_angle_change;
 };
 
 } /* end namespace */
