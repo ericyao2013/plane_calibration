@@ -70,6 +70,7 @@ protected:
   std::atomic<int> iterations_;
 
   std::pair<double, double> last_valid_calibration_result_;
+  std::pair<double, double> last_calibration_result_;
   Eigen::MatrixXf last_valid_calibration_result_plane_;
   Eigen::Affine3d last_valid_calibration_transformation_;
 

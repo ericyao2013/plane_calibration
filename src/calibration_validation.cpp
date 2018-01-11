@@ -134,6 +134,9 @@ bool CalibrationValidation::checkTooLow(const Eigen::MatrixXf& difference, const
   double too_low_distance = 0.0 - config_.too_low_buffer;
   int is_too_low = (difference.array() < too_low_distance).count();
   too_low_ratio = is_too_low / (double)not_nan_count;
+   
+  is_too_low = ( difference.array().abs() > 0.04 ).count();
+  too_low_ratio = is_too_low / (double)not_nan_count;  
 
   if (too_low_ratio > config_.max_too_low_ratio)
   {
