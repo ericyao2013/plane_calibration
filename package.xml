@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package>
   <name>plane_calibration</name>
-  <version>0.2.0</version>
+  <version>0.3.0</version>
   <description>The plane calibration package for
   robust on the fly 3d sensor orientation adjustments using the ground floor plane</description>
   <maintainer email="Rei.man.nalex8.8+ROS_PC@gmail.com">Alexander Reimann</maintainer>
