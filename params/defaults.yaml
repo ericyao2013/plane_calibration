@@ -20,7 +20,7 @@ debug:          false
 always_update:  false
 
 maximum_range_of_depth_camera: 3.5
-threshold_normalized_z_by_xy: 0.13
+threshold_normalized_z_by_xy: 0.16
 threshold_normalized_invalid_z_by_xy: 0.32
 max_angle_change: 0.8
   
