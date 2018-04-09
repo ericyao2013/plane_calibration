@@ -1,0 +1,2 @@
+- setup-file:
+    local-name: /opt/yujin/amd64/kinetic-devel/setup.sh

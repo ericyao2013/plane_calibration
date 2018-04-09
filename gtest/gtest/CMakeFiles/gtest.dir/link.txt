@@ -1,0 +1,1 @@
+/usr/bin/c++  -fPIC -O3 -DNDEBUG  -shared -Wl,-soname,libgtest.so -o libgtest.so CMakeFiles/gtest.dir/src/gtest-all.cc.o  -L/opt/groot/navi_ws_backup/src/plane_calibration/gtest/gtest/src -lpthread -Wl,-rpath,/opt/groot/navi_ws_backup/src/plane_calibration/gtest/gtest/src 

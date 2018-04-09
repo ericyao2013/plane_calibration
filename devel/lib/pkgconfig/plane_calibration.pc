@@ -1,0 +1,8 @@
+prefix=/opt/groot/navi_ws_backup/src/plane_calibration/devel
+
+Name: plane_calibration
+Description: Description of plane_calibration
+Version: 0.2.0
+Cflags: -I/opt/groot/navi_ws_backup/src/plane_calibration/devel/include -I/opt/groot/navi_ws_backup/src/plane_calibration/include -I/usr/include/eigen3
+Libs: -L/opt/groot/navi_ws_backup/src/plane_calibration/devel/lib -lplane_calibration
+Requires: ecl_build ecl_geometry roscpp nodelet dynamic_reconfigure sensor_msgs geometry_msgs tf2 tf2_msgs image_geometry depth_image_proc eigen_conversions tf2_ros

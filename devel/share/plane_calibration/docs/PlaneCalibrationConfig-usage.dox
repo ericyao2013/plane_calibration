@@ -1,0 +1,27 @@
+\subsubsection usage Usage
+\verbatim
+<node name="plane_calibration" pkg="plane_calibration" type="plane_calibration">
+  <param name="enable" type="bool" value="True" />
+  <param name="input_max_noise" type="double" value="0.03" />
+  <param name="input_threshold_from_ground" type="double" value="0.15" />
+  <param name="input_max_nan_ratio" type="double" value="0.5" />
+  <param name="input_max_zero_ratio" type="double" value="0.5" />
+  <param name="input_min_data_ratio" type="double" value="0.7" />
+  <param name="max_deviation_degrees" type="double" value="6.0" />
+  <param name="iterations" type="int" value="4" />
+  <param name="precompute_planes" type="bool" value="True" />
+  <param name="precomputed_plane_pairs_count" type="int" value="40" />
+  <param name="plane_max_too_low_ratio" type="double" value="0.02" />
+  <param name="plane_max_mean" type="double" value="0.03" />
+  <param name="debug" type="bool" value="False" />
+  <param name="use_manual_ground_transform" type="bool" value="False" />
+  <param name="always_update" type="bool" value="False" />
+  <param name="x" type="double" value="0.0" />
+  <param name="y" type="double" value="0.3" />
+  <param name="z" type="double" value="1.6" />
+  <param name="px_degree" type="double" value="0.0" />
+  <param name="py_degree" type="double" value="0.0" />
+  <param name="pz_degree" type="double" value="0.0" />
+</node>
+\endverbatim
+

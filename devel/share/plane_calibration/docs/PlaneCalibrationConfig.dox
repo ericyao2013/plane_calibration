@@ -1,0 +1,26 @@
+\subsubsection parameters ROS parameters
+
+Reads and maintains the following parameters on the ROS server
+
+- \b "~enable" : \b [bool] Enable flag min: False, default: True, max: True
+- \b "~input_max_noise" : \b [double] Max. noise range min: 0.0, default: 0.03, max: 0.1
+- \b "~input_threshold_from_ground" : \b [double] Threshold from ground for valid points [temporary] min: 0.0, default: 0.15, max: 0.3
+- \b "~input_max_nan_ratio" : \b [double] Max. ratio of nans to consider valid input data min: 0.0, default: 0.5, max: 1.0
+- \b "~input_max_zero_ratio" : \b [double] Max. ratio of zeros to consider valid input data min: 0.0, default: 0.5, max: 1.0
+- \b "~input_min_data_ratio" : \b [double] Min. ratio of valid overall data to consider valid input data min: 0.0, default: 0.7, max: 1.0
+- \b "~max_deviation_degrees" : \b [double] Max. deviation of the ground plane orientation [degree] min: 0.0, default: 6.0, max: 14.0
+- \b "~iterations" : \b [int] Iterations to optimize estimation min: 0, default: 4, max: 20
+- \b "~precompute_planes" : \b [bool] Precompute planes for fitting or calculate on the fly min: False, default: True, max: True
+- \b "~precomputed_plane_pairs_count" : \b [int] Iterations to optimize estimation min: 1, default: 40, max: 200
+- \b "~plane_max_too_low_ratio" : \b [double] [Validation] Max. ratio of points lower than given ground plane to consider fitting the data min: 0.0, default: 0.02, max: 1.0
+- \b "~plane_max_mean" : \b [double] [Validation] Max. mean data point abs. distance to given ground plane to consider fitting the data min: 0.0, default: 0.03, max: 0.2
+- \b "~debug" : \b [bool] Show debug things, e.g. tf transforms min: False, default: False, max: True
+- \b "~use_manual_ground_transform" : \b [bool] Use the settings below for the ground plane transformation min: False, default: False, max: True
+- \b "~always_update" : \b [bool] Update calibration even if old calibration looks fine min: False, default: False, max: True
+- \b "~x" : \b [double] x offset min: -2.0, default: 0.0, max: 2.0
+- \b "~y" : \b [double] y offset min: -2.0, default: 0.3, max: 2.0
+- \b "~z" : \b [double] z offset min: -2.0, default: 1.6, max: 2.0
+- \b "~px_degree" : \b [double] px offset min: -180.0, default: 0.0, max: 180.0
+- \b "~py_degree" : \b [double] py offset min: -180.0, default: 0.0, max: 180.0
+- \b "~pz_degree" : \b [double] pz offset min: -180.0, default: 0.0, max: 180.0
+

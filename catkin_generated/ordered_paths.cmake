@@ -1,0 +1,1 @@
+set(ORDERED_PATHS "/opt/yujin/amd64/kinetic-devel/lib;/opt/ros/kinetic/lib")
